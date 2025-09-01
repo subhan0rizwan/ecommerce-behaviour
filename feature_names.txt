@@ -1,0 +1,14 @@
+total_purchases
+total_views
+total_carts
+session_counts
+session_duration_minutes
+avg_purchase_value
+most_frequent_country
+most_frequent_category
+most_frequent_brand
+purchase_count
+unique_categories_count
+avg_monthly_purchases
+cart_to_purchase_ratio
+session_decay
