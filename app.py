@@ -23,24 +23,37 @@ st.markdown(f"""
 <style>
     @media (prefers-color-scheme: light) {{
         .main {{
-            background-color: {WARM_BG_COLOR};
+            background: linear-gradient(
+                135deg,
+                #FFF7F0 0%,
+                #FFE9DC 50%,
+                #FFF3E5 100%
+            );
             color: #000000;
             font-family: 'Segoe UI', sans-serif;
         }}
         h1, h2, h3, h4 {{ color: {PRIMARY_COLOR}; }}
         section[data-testid="stSidebar"] {{
-            background-color: #ffffff;
+            background: linear-gradient(
+                180deg,
+                #ffffff 0%,
+                #FFF4EB 100%
+            );
             border-right: 2px solid {PRIMARY_COLOR};
         }}
         .stButton>button {{
-            background-color: {PRIMARY_COLOR};
+            background: linear-gradient(90deg, {PRIMARY_COLOR}, {SECONDARY_COLOR});
             color: white;
             border-radius: 8px;
             border: none;
             padding: 0.6em 1.2em;
             font-weight: bold;
+            box-shadow: 0px 4px 6px rgba(0,0,0,0.1);
+            transition: background 0.3s ease-in-out;
         }}
-        .stButton>button:hover {{ background-color: {SECONDARY_COLOR}; }}
+        .stButton>button:hover {{
+            background: linear-gradient(90deg, {SECONDARY_COLOR}, {PRIMARY_COLOR});
+        }}
     }}
     @media (prefers-color-scheme: dark) {{
         .main {{
@@ -50,7 +63,8 @@ st.markdown(f"""
         }}
         h1, h2, h3, h4 {{
             color: #ff00ff;
-            text-shadow: 0px 0px 10px #ff00ff, 0px 0px 20px #ff33cc;
+            text-shadow: 0px 0px 15px #ff00ff, 0px 0px 25px #00ffff;
+            animation: neonGlow 3s infinite alternate;
         }}
         section[data-testid="stSidebar"] {{
             background-color: #1a1a1a;
@@ -63,17 +77,45 @@ st.markdown(f"""
             border-radius: 10px;
             padding: 0.6em 1.2em;
             text-shadow: 0px 0px 5px #00ffff;
-            box-shadow: 0px 0px 10px #ff00ff, 0px 0px 20px #00ffff;
+            box-shadow: 0px 0px 15px #ff00ff, 0px 0px 25px #00ffff;
+            animation: buttonGlow 4s infinite alternate;
         }}
         .stButton>button:hover {{
             background: linear-gradient(90deg, #00ffff, #ff00ff);
             color: white;
-            box-shadow: 0px 0px 15px #00ffff, 0px 0px 25px #ff00ff;
+            box-shadow: 0px 0px 20px #00ffff, 0px 0px 30px #ff00ff;
+        }}
+
+        /* Animations */
+        @keyframes neonGlow {{
+            0% {{
+                text-shadow: 0px 0px 10px #ff00ff, 0px 0px 20px #ff33cc;
+                color: #ff00ff;
+            }}
+            50% {{
+                text-shadow: 0px 0px 15px #00ffff, 0px 0px 30px #33ccff;
+                color: #00ffff;
+            }}
+            100% {{
+                text-shadow: 0px 0px 20px #ff6600, 0px 0px 40px #ff3300;
+                color: #ff6600;
+            }}
+        }}
+
+        @keyframes buttonGlow {{
+            0% {{
+                box-shadow: 0px 0px 10px #ff00ff, 0px 0px 20px #00ffff;
+            }}
+            50% {{
+                box-shadow: 0px 0px 15px #33ccff, 0px 0px 30px #ff33cc;
+            }}
+            100% {{
+                box-shadow: 0px 0px 20px #ff6600, 0px 0px 40px #ff3300;
+            }}
         }}
     }}
 </style>
 """, unsafe_allow_html=True)
-
 # ==============================
 # App Title
 # ==============================
@@ -310,3 +352,4 @@ elif page == "CLV Analysis":
 # Download
 # ==============================
 st.download_button("⬇️ Download Filtered Data", df_filtered.to_csv(index=False), file_name="churn_data.csv")
+
