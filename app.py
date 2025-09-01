@@ -3,6 +3,7 @@ import pandas as pd
 import plotly.express as px
 import joblib
 from sklearn.preprocessing import LabelEncoder
+import numpy as np
 
 # ==============================
 # Configuration
@@ -20,7 +21,6 @@ DARK_BG_COLOR = "#121212"
 # ==============================
 st.markdown(f"""
 <style>
-    /* 🌞 Light Mode */
     @media (prefers-color-scheme: light) {{
         .main {{
             background-color: {WARM_BG_COLOR};
@@ -42,7 +42,6 @@ st.markdown(f"""
         }}
         .stButton>button:hover {{ background-color: {SECONDARY_COLOR}; }}
     }}
-    /* 🌙 Dark Mode */
     @media (prefers-color-scheme: dark) {{
         .main {{
             background-color: #0d0d0d;
@@ -89,15 +88,34 @@ def load_data():
     return pd.read_csv("churn_features.csv")
 
 @st.cache_resource
-def load_model():
-    bundle = joblib.load("churn_lgb_bundle.pkl")
-    return bundle["model"], bundle["scaler"]
+def load_models():
+    """Load all saved models (must be trained & exported already)."""
+    models = {}
+    try:
+        bundle_lgb = joblib.load("churn_lgb_bundle.pkl")
+        models["LightGBM"] = (bundle_lgb["model"], bundle_lgb["scaler"])
+    except:
+        pass
+
+    try:
+        bundle_xgb = joblib.load("churn_xgb_bundle.pkl")
+        models["XGBoost"] = (bundle_xgb["model"], bundle_xgb["scaler"])
+    except:
+        pass
+
+    try:
+        bundle_nn = joblib.load("churn_nn_bundle.pkl")
+        models["NeuralNet"] = (bundle_nn["model"], bundle_nn["scaler"])
+    except:
+        pass
+
+    return models
 
 try:
     df = load_data()
-    model, scaler = load_model()
+    MODELS = load_models()
 except Exception as e:
-    st.error(f"⚠️ Failed to load data/model: {str(e)}")
+    st.error(f"⚠️ Failed to load data/models: {str(e)}")
     st.stop()
 
 # Pre-fit encoders for categorical features
@@ -111,22 +129,35 @@ for col in ['most_frequent_category', 'most_frequent_country', 'most_frequent_br
 # ==============================
 # Utility Functions
 # ==============================
-def make_chart(fig):
-    with st.container():
-        st.plotly_chart(fig, use_container_width=True)
-
-def predict_churn(input_data: pd.DataFrame):
-    """Preprocess, align features, and predict churn."""
+def preprocess_input(input_data: pd.DataFrame, scaler, base_df: pd.DataFrame):
+    """Aligns features and scales input."""
     for col, le in ENCODERS.items():
         if col in input_data:
             input_data[col] = le.transform(input_data[col].astype(str))
 
-    expected_features = [c for c in df.drop(columns=['user_id', 'churn'], errors='ignore').columns]
+    expected_features = [c for c in base_df.drop(columns=['user_id', 'churn'], errors='ignore').columns]
     input_data = input_data.reindex(columns=expected_features, fill_value=0)
 
-    input_scaled = scaler.transform(input_data)
-    proba = model.predict_proba(input_scaled)[0]
-    return (int(proba[1] > 0.5), proba[1])
+    return scaler.transform(input_data)
+
+def predict_with_model(model, scaler, input_data):
+    processed = preprocess_input(input_data, scaler, df)
+    proba = model.predict_proba(processed)[0]
+    return int(proba[1] > 0.5), proba[1]
+
+def ensemble_predict(input_data):
+    preds, probs = [], []
+    for name, (model, scaler) in MODELS.items():
+        p, pr = predict_with_model(model, scaler, input_data)
+        preds.append(p)
+        probs.append(pr)
+    final_pred = int(np.mean(preds) > 0.5)
+    final_proba = np.mean(probs)
+    return final_pred, final_proba
+
+def make_chart(fig):
+    with st.container():
+        st.plotly_chart(fig, use_container_width=True)
 
 # ==============================
 # Sidebar
@@ -136,6 +167,11 @@ page = st.sidebar.radio("Go to:", [
     "Dashboard", "Data Overview", "Feature Importance", 
     "Churn Prediction by Category", "Churn Prediction by Country", "CLV Analysis"
 ])
+
+# Model selection
+selected_model_name = st.sidebar.selectbox(
+    "Select Model", list(MODELS.keys()) + ["Ensemble"]
+)
 
 countries = st.sidebar.multiselect(
     "Filter by Country", 
@@ -162,7 +198,7 @@ if page == "Dashboard":
         color_continuous_scale="Inferno", template="plotly_dark"
     )
     make_chart(fig)
-    
+
 elif page == "Data Overview":
     st.header("Data Overview")
     st.dataframe(df_filtered.head())
@@ -178,37 +214,34 @@ elif page == "Data Overview":
 elif page == "Feature Importance":
     st.header("Feature Importance")
     try:
-        # Try to extract feature names from file (saved during training)
-        if hasattr(model, "feature_importances_"):
-            try:
-                # load feature names saved during training
-                with open("feature_names.txt", "r") as f:
-                    feature_names = [line.strip() for line in f.readlines()]
-            except:
-                # fallback if no file exists
-                feature_names = [f"Feature {i}" for i in range(len(model.feature_importances_))]
+        if selected_model_name != "Ensemble":
+            model, _ = MODELS[selected_model_name]
+            if hasattr(model, "feature_importances_"):
+                try:
+                    with open("feature_names.txt", "r") as f:
+                        feature_names = [line.strip() for line in f.readlines()]
+                except:
+                    feature_names = [f"Feature {i}" for i in range(len(model.feature_importances_))]
 
-            feature_importances = model.feature_importances_
+                feature_importances = model.feature_importances_
+                fig = px.bar(
+                    x=feature_importances,
+                    y=feature_names,
+                    orientation="h",
+                    title=f"{selected_model_name} Feature Importance",
+                    color=feature_importances,
+                    color_continuous_scale="Blues",
+                    template="plotly_dark"
+                )
+                make_chart(fig)
 
-            fig = px.bar(
-                x=feature_importances,
-                y=feature_names,
-                orientation="h",
-                title="LightGBM Feature Importance",
-                color=feature_importances,
-                color_continuous_scale="Blues",
-                template="plotly_dark"
-            )
-            make_chart(fig)
-
-        # Always show SHAP summary from XGBoost
-        st.image("shap_summary.png", caption="SHAP Summary Plot (XGBoost)", width=700)
+        st.image("shap_summary.png", caption="SHAP Summary Plot", width=700)
 
     except Exception as e:
         st.warning(f"⚠️ Feature importance not available: {e}")
 
 elif page == "Churn Prediction by Category":
-    st.header("Predict Churn by Category")
+    st.header(f"Predict Churn by Category ({selected_model_name})")
     with st.form("category_form"):
         selected_category = st.selectbox("Most Frequent Category", df_filtered['most_frequent_category'].unique())
         avg_purchases = st.slider("Total Purchases", 0, 20, 5)
@@ -223,12 +256,18 @@ elif page == "Churn Prediction by Category":
                 "most_frequent_country": [df_filtered['most_frequent_country'].mode()[0]],
                 "most_frequent_brand": [df_filtered['most_frequent_brand'].mode()[0]],
             })
-            pred, prob = predict_churn(input_data)
+
+            if selected_model_name == "Ensemble":
+                pred, prob = ensemble_predict(input_data)
+            else:
+                model, scaler = MODELS[selected_model_name]
+                pred, prob = predict_with_model(model, scaler, input_data)
+
             st.success(f"Prediction: {'Churn' if pred else 'No Churn'}")
             st.info(f"Churn Probability: {prob:.2%}")
 
 elif page == "Churn Prediction by Country":
-    st.header("Predict Churn by Country")
+    st.header(f"Predict Churn by Country ({selected_model_name})")
     with st.form("country_form"):
         selected_country = st.selectbox("Most Frequent Country", df_filtered['most_frequent_country'].unique())
         avg_purchases = st.slider("Total Purchases", 0, 20, 5)
@@ -243,7 +282,13 @@ elif page == "Churn Prediction by Country":
                 "most_frequent_category": [df_filtered['most_frequent_category'].mode()[0]],
                 "most_frequent_brand": [df_filtered['most_frequent_brand'].mode()[0]],
             })
-            pred, prob = predict_churn(input_data)
+
+            if selected_model_name == "Ensemble":
+                pred, prob = ensemble_predict(input_data)
+            else:
+                model, scaler = MODELS[selected_model_name]
+                pred, prob = predict_with_model(model, scaler, input_data)
+
             st.success(f"Prediction: {'Churn' if pred else 'No Churn'}")
             st.info(f"Churn Probability: {prob:.2%}")
 
@@ -265,4 +310,3 @@ elif page == "CLV Analysis":
 # Download
 # ==============================
 st.download_button("⬇️ Download Filtered Data", df_filtered.to_csv(index=False), file_name="churn_data.csv")
-
