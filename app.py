@@ -154,15 +154,15 @@ if page == "Dashboard":
     col2.metric("Avg. Purchases/User", f"{df_filtered['total_purchases'].mean():.2f}")
     col3.metric("Top Category", df_filtered['most_frequent_category'].mode().iat[0])
 
-    st.subheader("Churn by Country")
-    churn_by_country = df_filtered.groupby('most_frequent_country')['churn'].mean().reset_index()
+    st.subheader("Churn by Brand")
+    churn_by_brand = df_filtered.groupby('most_frequent_brand')['churn'].mean().reset_index()
     fig = px.bar(
-        churn_by_country, x='most_frequent_country', y='churn',
-        title="Churn Rate by Country", color='churn',
+        churn_by_brand, x='most_frequent_brand', y='churn',
+        title="Churn Rate by Brand", color='churn',
         color_continuous_scale="Inferno", template="plotly_dark"
     )
     make_chart(fig)
-
+    
 elif page == "Data Overview":
     st.header("Data Overview")
     st.dataframe(df_filtered.head())
@@ -265,3 +265,4 @@ elif page == "CLV Analysis":
 # Download
 # ==============================
 st.download_button("⬇️ Download Filtered Data", df_filtered.to_csv(index=False), file_name="churn_data.csv")
+
